@@ -1,4 +1,68 @@
-Flask==2.3.2
-pandas==2.1.2
-numpy==1.26.3
-pytest==7.4.0
+# Core Flask Framework
+Flask
+Flask-CORS
+Flask-SocketIO
+
+# Data Science & Machine Learning
+pandas
+numpy
+scikit-learn
+scipy
+
+# Optimization Libraries
+PuLP
+DEAP
+ortools
+
+# Database & Storage
+SQLAlchemy
+
+# API & Web
+requests
+Werkzeug
+Jinja2
+
+# Data Visualization
+matplotlib
+seaborn
+plotly
+
+# Real-time Processing
+redis
+celery
+
+# Utilities
+python-dotenv
+schedule
+pytz
+colorama
+
+# Testing
+pytest
+pytest-flask
+
+# Development
+python-dateutil
+joblib
+
+# Frontend Integration (Optional)
+gradio
+streamlit
+
+# Monitoring & Logging
+loguru
+psutil
+
+# File Processing
+openpyxl
+xlsxwriter
+
+# Additional ML Libraries
+xgboost
+lightgbm
+
+# Time Series (for delay prediction)
+statsmodels
+
+# Performance
+numba
