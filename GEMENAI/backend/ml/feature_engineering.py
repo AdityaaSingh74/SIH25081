@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
-def preprocess_data(input_path='data/kochi_metro_train_scheduling.csv'):
+def preprocess_data(input_path='../data/kochi_metro_train_scheduling.csv'):
     """
     Loads raw data, cleans it, and engineers features for ML models.
     This creates the foundational data for the entire pipeline.
