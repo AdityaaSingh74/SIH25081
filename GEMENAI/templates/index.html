@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kochi Metro Optimizer [SIH 25081]</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .step-card {
+            transition: all 0.3s ease-in-out;
+            border-left: 4px solid transparent;
+        }
+        .step-card.active { border-left-color: #3b82f6; }
+        .step-card.completed { border-left-color: #22c55e; }
+        .step-card.error { border-left-color: #ef4444; }
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .btn-primary:hover:not(:disabled) { background-color: #2563eb; }
+        .btn-primary:disabled { background-color: #9ca3af; cursor: not-allowed; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-gray-800">Kochi Metro Scheduling Optimizer</h1>
+            <p class="text-lg text-gray-600 mt-2">A Decision Support System for SIH Problem Statement #25081</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Left Column: Control Panel -->
+            <div class="flex flex-col gap-6">
+                <!-- Step 1: Preprocessing -->
+                <div id="step-1-card" class="bg-white p-6 rounded-lg shadow-md step-card active">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-2xl font-semibold">Step 1: Preprocess Data</h2>
+                        <div id="step-1-status" class="text-gray-400">Pending</div>
+                    </div>
+                    <p class="mt-2 text-gray-600">Clean the raw CSV data and engineer features like `is_ready` and `delay_minutes` for the ML models.</p>
+                    <button id="preprocess-btn" class="mt-4 w-full md:w-auto font-semibold py-2 px-4 rounded-lg btn-primary flex items-center justify-center gap-2">
+                        <div id="preprocess-loader" class="loader hidden"></div>
+                        Preprocess Input Data
+                    </button>
+                </div>
+
+                <!-- Step 2: Training -->
+                <div id="step-2-card" class="bg-white p-6 rounded-lg shadow-md step-card">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-2xl font-semibold">Step 2: Train ML Models</h2>
+                        <div id="step-2-status" class="text-gray-400">Waiting</div>
+                    </div>
+                    <p class="mt-2 text-gray-600">Train a Readiness Classifier and a Delay Regressor using the preprocessed data.</p>
+                    <button id="train-btn" class="mt-4 w-full md:w-auto font-semibold py-2 px-4 rounded-lg btn-primary flex items-center justify-center gap-2" disabled>
+                        <div id="train-loader" class="loader hidden"></div>
+                        Train Models
+                    </button>
+                </div>
+
+                <!-- Step 3: Optimization -->
+                <div id="step-3-card" class="bg-white p-6 rounded-lg shadow-md step-card">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-2xl font-semibold">Step 3: Generate Schedule</h2>
+                        <div id="step-3-status" class="text-gray-400">Waiting</div>
+                    </div>
+                    <p class="mt-2 text-gray-600">Run the optimization algorithm to create a schedule that minimizes delays and avoids non-ready trains.</p>
+                    <button id="optimize-btn" class="mt-4 w-full md:w-auto font-semibold py-2 px-4 rounded-lg btn-primary flex items-center justify-center gap-2" disabled>
+                        <div id="optimize-loader" class="loader hidden"></div>
+                        Generate Optimized Schedule
+                    </button>
+                </div>
+
+                <!-- Step 4: Simulation -->
+                <div id="step-4-card" class="bg-white p-6 rounded-lg shadow-md step-card">
+                     <div class="flex items-center justify-between">
+                        <h2 class="text-2xl font-semibold">Step 4: Run "What-If" Simulation</h2>
+                        <div id="step-4-status" class="text-gray-400">Waiting</div>
+                    </div>
+                    <p class="mt-2 text-gray-600">Test the resilience of the generated schedule by simulating real-world operational disruptions.</p>
+                    <button id="simulate-btn" class="mt-4 w-full md:w-auto font-semibold py-2 px-4 rounded-lg btn-primary flex items-center justify-center gap-2" disabled>
+                        <div id="simulate-loader" class="loader hidden"></div>
+                        Simulate Disruptions
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column: Results & Visualization -->
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold border-b pb-3 mb-4">Process Log & Results</h2>
+                <div id="results-area" class="text-gray-700 space-y-4 h-[70vh] overflow-y-auto">
+                    <div id="placeholder" class="text-center text-gray-500 mt-8">
+                        <p>Your results will appear here.</p>
+                        <p>Start by clicking "Preprocess Input Data".</p>
+                    </div>
+                </div>
+                 <a href="/download_schedule" id="download-link" class="hidden mt-4 inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">
+                    Download Optimized Schedule CSV
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const buttons = {
+            preprocess: document.getElementById('preprocess-btn'),
+            train: document.getElementById('train-btn'),
+            optimize: document.getElementById('optimize-btn'),
+            simulate: document.getElementById('simulate-btn'),
+        };
+        const loaders = {
+            preprocess: document.getElementById('preprocess-loader'),
+            train: document.getElementById('train-loader'),
+            optimize: document.getElementById('optimize-loader'),
+            simulate: document.getElementById('simulate-loader'),
+        };
+        const cards = {
+            1: document.getElementById('step-1-card'),
+            2: document.getElementById('step-2-card'),
+            3: document.getElementById('step-3-card'),
+            4: document.getElementById('step-4-card'),
+        };
+        const statuses = {
+             1: document.getElementById('step-1-status'),
+             2: document.getElementById('step-2-status'),
+             3: document.getElementById('step-3-status'),
+             4: document.getElementById('step-4-status'),
+        };
+        const resultsArea = document.getElementById('results-area');
+        const placeholder = document.getElementById('placeholder');
+        const downloadLink = document.getElementById('download-link');
+        let simulationChart = null;
+
+
+        // --- UI Helper Functions ---
+        const setStepState = (step, state, message) => { // states: 'pending', 'active', 'completed', 'error'
+            const card = cards[step];
+            card.className = 'bg-white p-6 rounded-lg shadow-md step-card ' + state;
+            status.textContent = message;
+            status.className = {
+                'completed': 'text-green-600 font-semibold',
+                'error': 'text-red-600 font-semibold',
+                'active': 'text-blue-600 font-semibold',
+            }[state] || 'text-gray-400';
+        };
+
+        const toggleButtonState = (button, isLoading) => {
+            button.disabled = isLoading;
+            loaders[button.id.split('-')[0]].classList.toggle('hidden', !isLoading);
+        };
+        
+        const appendResult = (title, content, isError = false) => {
+            if (placeholder) placeholder.style.display = 'none';
+            const resultBlock = document.createElement('div');
+            resultBlock.className = `p-4 rounded-lg ${isError ? 'bg-red-50 border border-red-200' : 'bg-gray-50 border'}`;
+            resultBlock.innerHTML = `
+                <h3 class="font-semibold text-lg ${isError ? 'text-red-800' : 'text-gray-800'}">${title}</h3>
+                <div class="mt-2 text-sm whitespace-pre-wrap">${content}</div>
+            `;
+            resultsArea.appendChild(resultBlock);
+            resultsArea.scrollTop = resultsArea.scrollHeight;
+        };
+        
+        // --- API Call Logic ---
+        async function handleApiCall(step, endpoint, button, nextButton) {
+            toggleButtonState(button, true);
+            setStepState(step, 'active', 'In Progress...');
+            downloadLink.classList.add('hidden');
+
+            try {
+                const response = await fetch(endpoint, { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok && result.status === 'success') {
+                    setStepState(step, 'completed', 'Success');
+                    if (nextButton) nextButton.disabled = false;
+                    
+                    window[`displayStep${step}Results`](result);
+
+                } else {
+                    throw new Error(result.message || 'An unknown error occurred.');
+                }
+            } catch (error) {
+                setStepState(step, 'error', 'Failed');
+                appendResult(`Step ${step} Error`, error.message, true);
+            } finally {
+                toggleButtonState(button, false);
+            }
+        }
+        
+        // --- Result Display Functions ---
+        function displayStep1Results(result) {
+            const preview = JSON.parse(result.data_preview);
+            const rows = preview.map(row => `  - ${JSON.stringify(row)}`).join('\n');
+            const content = `${result.message}\n\nProcessed Data Preview (first 5 rows):\n${rows}`;
+            appendResult('Step 1: Preprocessing Complete', content);
+        }
+
+        function displayStep2Results(result) {
+            const m = result.metrics;
+            const content = `
+Readiness Classifier:
+  - Accuracy:  ${(m.readiness_accuracy * 100).toFixed(2)}%
+  - Precision: ${m.readiness_precision.toFixed(2)}
+  - Recall:    ${m.readiness_recall.toFixed(2)}
+
+Delay Regressor:
+  - Mean Squared Error: ${m.delay_mse.toFixed(2)}
+            `;
+            appendResult('Step 2: Model Training Complete', content);
+        }
+
+        function displayStep3Results(result) {
+            const r = result.results;
+            const content = `
+Optimization Status: ${r.status}
+Trips Optimized:     ${r.num_trips_optimized}
+Final Objective Value: ${r.total_objective_value.toFixed(2)}
+            `;
+            appendResult('Step 3: Optimization Complete', content);
+            downloadLink.classList.remove('hidden');
+        }
+
+        function displayStep4Results(result) {
+            const r = result.results;
+            const content = `
+Disruptions Applied: ${r.num_disruptions_applied}
+Original Predicted Total Delay: ${r.original_total_delay} mins
+Simulated Total Delay (w/ disruptions): ${r.simulated_total_delay} mins
+            `;
+            appendResult('Step 4: Simulation Complete', content);
+            
+            const chartCanvas = document.createElement('canvas');
+            resultsArea.appendChild(chartCanvas);
+
+            if (simulationChart) simulationChart.destroy();
+
+            simulationChart = new Chart(chartCanvas, {
+                type: 'bar',
+                data: {
+                    labels: ['Total Delay (Minutes)'],
+                    datasets: [{
+                        label: 'Predicted Delay (Optimized)',
+                        data: [r.original_total_delay],
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                    }, {
+                        label: 'Simulated Delay (with Disruptions)',
+                        data: [r.simulated_total_delay],
+                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: true } },
+                    plugins: { title: { display: true, text: 'Simulation Results: Predicted vs. Actual Delay' } }
+                }
+            });
+        }
+        
+        // --- Event Listeners ---
+        buttons.preprocess.addEventListener('click', () => handleApiCall(1, '/preprocess', buttons.preprocess, buttons.train));
+        buttons.train.addEventListener('click', () => handleApiCall(2, '/train', buttons.train, buttons.optimize));
+        buttons.optimize.addEventListener('click', () => handleApiCall(3, '/optimize', buttons.optimize, buttons.simulate));
+        buttons.simulate.addEventListener('click', () => handleApiCall(4, '/simulate', buttons.simulate, null));
+
+    </script>
+</body>
+</html>
+

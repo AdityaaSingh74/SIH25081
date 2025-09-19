@@ -1,0 +1,10 @@
+service_date,trip_id,train_id,direction,station_id,station_name,sequence_number,arrival_time,departure_time,dwell_time_seconds,distance_km,service_pattern,is_terminal,platform_number,scheduled_load_factor,day_type
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,ALV,Aluva,1,06:00:00,06:01:00,60.0,0.0,Peak_Morning,True,1,0.5252026934168514,Weekday
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,KLM,Kalamassery,2,06:03:00,06:03:30,30.0,3.2,Peak_Morning,False,1,0.7486942276904955,Weekday
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,CKS,Cusat,3,06:05:00,06:05:30,30.0,4.8,Peak_Morning,False,1,0.932648539488214,Weekday
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,PTB,Pathadippalam,4,06:08:00,06:08:30,30.0,6.4,Peak_Morning,False,1,0.41392422203125195,Weekday
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,EDL,Edapally,5,06:10:00,06:10:30,30.0,9.1,Peak_Morning,False,1,0.34109847951588623,Weekday
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,CNG,Changampuzha Park,6,06:12:00,06:12:30,30.0,11.2,Peak_Morning,False,1,0.8084044563416084,Weekday
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,PLM,Palarivattom,7,06:14:00,06:14:30,30.0,13.8,Peak_Morning,False,1,0.6121968378243916,Weekday
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,JLN,JLN Stadium,8,06:16:00,06:16:30,30.0,15.4,Peak_Morning,False,1,0.4165802024101828,Weekday
+2025-09-01,TRIP-20250901-001,KMRL-008,UP,KLR,Kaloor,9,06:19:00,06:19:30,30.0,17.1,Peak_Morning,False,1,0.7968677534643103,Weekday
