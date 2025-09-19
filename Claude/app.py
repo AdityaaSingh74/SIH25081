@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import threading
 import time
-from models.ai_models import *
+from models.ai_model import *
 from models.optimization import *
 from models.data_generator import *
 
