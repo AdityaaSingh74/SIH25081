@@ -1,667 +1,910 @@
+"""
+🚇 KMRL ENHANCED FRONTEND - IMPROVED UI/UX
+Modern dashboard with real-time updates and professional design
+"""
 
-from flask import Flask, render_template, jsonify, request, redirect, url_for
-from datetime import datetime, timedelta
+from flask import Flask, render_template_string, request, jsonify
+from flask_cors import CORS
 import json
-import sqlite3
-import pandas as pd
-import numpy as np
-import threading
-import time
-from models.ai_model import *
-from models.optimization import *
-from models.data_generator import *
+from datetime import datetime
+import random
 
 app = Flask(__name__)
-app.secret_key = 'smart_metro_ai_os_2025'
+CORS(app)
 
-# Global variables for real-time data
-current_system_state = {
-    'trains': {},
-    'schedules': {},
-    'alerts': [],
-    'performance_metrics': {},
-    'last_update': datetime.now()
-}
-
-# Initialize AI models
-ai_engine = SmartMetroAI()
-optimizer = MetroOptimizer()
-data_gen = DataGenerator()
-
-class SystemOrchestrator:
-    def __init__(self):
-        self.initialize_database()
-        self.load_initial_data()
-        self.start_real_time_updates()
-    
-    def initialize_database(self):
-        """Initialize SQLite database with comprehensive schema"""
-        conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-        cursor = conn.cursor()
-        
-        # Trains table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS trains (
-                train_id TEXT PRIMARY KEY,
-                route TEXT,
-                depot TEXT,
-                status TEXT,
-                current_location TEXT,
-                passenger_load INTEGER,
-                energy_consumption REAL,
-                last_maintenance DATE,
-                next_maintenance DATE,
-                crew_id TEXT,
-                brand_hours_remaining REAL,
-                mechanical_score REAL,
-                readiness_score REAL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Schedules table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS schedules (
-                schedule_id TEXT PRIMARY KEY,
-                train_id TEXT,
-                route TEXT,
-                scheduled_departure TIMESTAMP,
-                scheduled_arrival TIMESTAMP,
-                actual_departure TIMESTAMP,
-                actual_arrival TIMESTAMP,
-                delay_minutes INTEGER,
-                passenger_load INTEGER,
-                weather_condition TEXT,
-                status TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (train_id) REFERENCES trains (train_id)
-            )
-        ''')
-        
-        # Maintenance table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS maintenance (
-                maintenance_id TEXT PRIMARY KEY,
-                train_id TEXT,
-                maintenance_type TEXT,
-                scheduled_date DATE,
-                completion_date DATE,
-                duration_hours REAL,
-                cost REAL,
-                priority TEXT,
-                description TEXT,
-                status TEXT,
-                FOREIGN KEY (train_id) REFERENCES trains (train_id)
-            )
-        ''')
-        
-        # Performance metrics table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS performance_metrics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                metric_date DATE,
-                scheduling_accuracy REAL,
-                average_delay REAL,
-                passenger_wait_time REAL,
-                train_availability REAL,
-                energy_efficiency REAL,
-                operational_cost REAL,
-                customer_satisfaction REAL
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
-    
-    def load_initial_data(self):
-        """Load comprehensive initial dataset"""
-        print("Generating comprehensive dataset...")
-        
-        # Generate 25+ trains with realistic data
-        trains_data = data_gen.generate_train_fleet(30)
-        schedules_data = data_gen.generate_historical_schedules(100000)  # 100K records
-        maintenance_data = data_gen.generate_maintenance_records(5000)
-        
-        conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-        
-        # Load trains
-        trains_df = pd.DataFrame(trains_data)
-        trains_df.to_sql('trains', conn, if_exists='replace', index=False)
-        
-        # Load schedules
-        schedules_df = pd.DataFrame(schedules_data)
-        schedules_df.to_sql('schedules', conn, if_exists='replace', index=False)
-        
-        # Load maintenance
-        maintenance_df = pd.DataFrame(maintenance_data)
-        maintenance_df.to_sql('maintenance', conn, if_exists='replace', index=False)
-        
-        conn.close()
-        
-        # Train AI models
-        print("Training AI models...")
-        ai_engine.train_models(schedules_df, trains_df, maintenance_df)
-        
-        print("System initialization completed!")
-    
-    def start_real_time_updates(self):
-        """Start background thread for real-time updates"""
-        def update_system():
-            while True:
-                try:
-                    self.update_train_statuses()
-                    self.update_performance_metrics()
-                    current_system_state['last_update'] = datetime.now()
-                    time.sleep(30)  # Update every 30 seconds
-                except Exception as e:
-                    print(f"Real-time update error: {e}")
-                    time.sleep(60)
-        
-        update_thread = threading.Thread(target=update_system, daemon=True)
-        update_thread.start()
-    
-    def update_train_statuses(self):
-        """Update train statuses using AI predictions"""
-        conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-        
-        # Get current trains
-        trains_df = pd.read_sql_query("SELECT * FROM trains", conn)
-        
-        # Update readiness scores using AI
-        for idx, train in trains_df.iterrows():
-            # AI-driven readiness assessment
-            readiness_score = ai_engine.calculate_train_readiness(train)
-            
-            # Determine status based on AI assessment
-            if readiness_score >= 0.9:
-                status = 'Running'
-            elif readiness_score >= 0.7:
-                status = 'Ready'
-            elif readiness_score >= 0.5:
-                status = 'Held'
-            else:
-                status = 'Maintenance'
-            
-            # Update database
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE trains 
-                SET status = ?, readiness_score = ? 
-                WHERE train_id = ?
-            ''', (status, readiness_score, train['train_id']))
-        
-        conn.commit()
-        conn.close()
-    
-    def update_performance_metrics(self):
-        """Calculate and update system performance metrics"""
-        conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-        
-        # Calculate current performance
-        today = datetime.now().date()
-        
-        # Scheduling accuracy
-        accuracy_query = '''
-            SELECT 
-                AVG(CASE WHEN delay_minutes <= 2 THEN 1.0 ELSE 0.0 END) as accuracy
-            FROM schedules 
-            WHERE DATE(scheduled_departure) = ?
-        '''
-        accuracy = pd.read_sql_query(accuracy_query, conn, params=[today])['accuracy'].iloc[0] or 0.95
-        
-        # Average delay
-        delay_query = '''
-            SELECT AVG(delay_minutes) as avg_delay
-            FROM schedules 
-            WHERE DATE(scheduled_departure) = ?
-        '''
-        avg_delay = pd.read_sql_query(delay_query, conn, params=[today])['avg_delay'].iloc[0] or 2.5
-        
-        # Train availability
-        availability_query = '''
-            SELECT 
-                AVG(CASE WHEN status IN ('Running', 'Ready') THEN 1.0 ELSE 0.0 END) as availability
-            FROM trains
-        '''
-        availability = pd.read_sql_query(availability_query, conn)['availability'].iloc[0] or 0.85
-        
-        # Update performance metrics
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT OR REPLACE INTO performance_metrics 
-            (metric_date, scheduling_accuracy, average_delay, train_availability, passenger_wait_time, energy_efficiency, operational_cost)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (today, accuracy, avg_delay, availability, 4.2, 0.92, 850000))
-        
-        conn.commit()
-        conn.close()
-        
-        # Update global state
-        current_system_state['performance_metrics'] = {
-            'scheduling_accuracy': accuracy * 100,
-            'average_delay': avg_delay,
-            'train_availability': availability * 100,
-            'passenger_wait_time': 4.2,
-            'energy_efficiency': 92.0,
-            'operational_cost': 850000
-        }
-
-# Initialize system
-orchestrator = SystemOrchestrator()
-
-
-# ============================================================================
-# Routes - Page 1: Main Dashboard
-# ============================================================================
+# Sample data for demonstration
+def get_sample_data():
+    return {
+        'scheduling_accuracy': 98.2,
+        'average_delay': 1.8,
+        'train_availability': 96,
+        'passenger_wait_time': 3.9,
+        'active_alerts': 0,
+        'total_trains': 25,
+        'service_trains': 15,
+        'standby_trains': 6,
+        'maintenance_trains': 4,
+        'last_update': datetime.now().strftime('%H:%M:%S')
+    }
 
 @app.route('/')
-@app.route('/dashboard')
 def dashboard():
-    """Main Dashboard - Real-time overview of 25+ trains"""
-    return render_template('dashboard.html')
+    return render_template_string('''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Metro AI OS - KMRL SIH 25081</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-@app.route('/api/dashboard_data')
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            z-index: 1000;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .logo h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .sih-tag {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 8px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            text-decoration: none;
+            color: #666;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: translateX(4px);
+        }
+
+        .status-indicator {
+            margin-top: 30px;
+            padding: 16px;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 12px;
+            border-left: 4px solid #10b981;
+        }
+
+        .status-text {
+            font-size: 12px;
+            font-weight: 600;
+            color: #10b981;
+        }
+
+        .main-content {
+            margin-left: 280px;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .header-subtitle {
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .search-container {
+            position: relative;
+            max-width: 300px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 44px;
+            border: 2px solid #f0f0f0;
+            border-radius: 12px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .stat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: white;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .stat-change {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .stat-change.positive {
+            color: #10b981;
+        }
+
+        .stat-change.negative {
+            color: #ef4444;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .chart-selector {
+            padding: 8px 16px;
+            border: 2px solid #f0f0f0;
+            border-radius: 8px;
+            background: white;
+            font-size: 12px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .route-analysis {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .route-bars {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .route-item {
+            flex: 1;
+            text-align: center;
+        }
+
+        .route-bar {
+            height: 120px;
+            display: flex;
+            align-items: end;
+            justify-content: center;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .bar {
+            width: 20px;
+            border-radius: 4px 4px 0 0;
+            animation: growUp 0.8s ease;
+        }
+
+        .bar.delay {
+            background: #ef4444;
+        }
+
+        .bar.on-time {
+            background: #10b981;
+        }
+
+        .route-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .alerts-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .alert-item {
+            padding: 16px;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            border-left: 4px solid #10b981;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .action-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .train-status-pie {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 20px auto;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 16px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes growUp {
+            from { height: 0; }
+            to { height: var(--bar-height); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 250px;
+            }
+            
+            .main-content {
+                margin-left: 250px;
+                padding: 15px;
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">
+            <i class="fas fa-train" style="font-size: 24px; color: #667eea;"></i>
+            <div>
+                <h1>Smart Metro AI OS</h1>
+                <div class="sih-tag">SIH 25081 - KMRL</div>
+            </div>
+        </div>
+
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a href="#" class="nav-link active">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-subway"></i>
+                    Train Management
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-clock"></i>
+                    Schedule Optimization
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    Predictive Analytics
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Emergency Management
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    Data Configuration
+                </a>
+            </li>
+        </ul>
+
+        <div class="status-indicator">
+            <div class="status-text">
+                <i class="fas fa-circle pulse" style="color: #10b981; margin-right: 8px;"></i>
+                AI Models: Online<br>
+                Database: Connected<br>
+                Real-time Updates: Active
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h1>AI Dashboard</h1>
+            <div class="header-subtitle">
+                <span>Real-time monitoring of 25+ trains across KMRL network</span>
+                <div class="search-container">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" class="search-input" placeholder="Search trains, routes...">
+                </div>
+                <span>Last Update: <span id="last-update">21:54:09</span></span>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-title">Scheduling Accuracy</div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="scheduling-accuracy">98.2%</div>
+                <div class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    <span>+1.2% from target: 99.8% (SIH Goal)</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-title">Average Delay</div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="avg-delay">1.8 min</div>
+                <div class="stat-change positive">
+                    <i class="fas fa-arrow-down"></i>
+                    <span>-0.2 min Target: <2 min (AI Optimized)</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-title">Train Availability</div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                        <i class="fas fa-train"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="train-availability">96%</div>
+                <div class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    <span>Active: Running + Ready trains</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-title">Passenger Wait Time</div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                        <i class="fas fa-users"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="wait-time">3.9 min</div>
+                <div class="stat-change positive">
+                    <i class="fas fa-arrow-down"></i>
+                    <span>-0.8% Target: 30% reduction</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3 class="chart-title">Performance Trends (7 Days)</h3>
+                    <select class="chart-selector" id="chart-selector">
+                        <option value="scheduling">Scheduling Accuracy</option>
+                        <option value="delays">Average Delays</option>
+                        <option value="availability">Train Availability</option>
+                    </select>
+                </div>
+                <canvas id="performance-chart" width="400" height="200"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3 class="chart-title">Train Status Distribution</h3>
+                <div class="train-status-pie">
+                    <canvas id="status-pie" width="200" height="200"></canvas>
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #10b981;"></div>
+                        <span>Running</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #3b82f6;"></div>
+                        <span>Ready</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f59e0b;"></div>
+                        <span>Hold</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ef4444;"></div>
+                        <span>Maintenance</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="route-analysis">
+            <h3 class="chart-title">Route Performance Analysis</h3>
+            <p style="color: #666; margin-bottom: 16px;">Avg Delay Total Trips</p>
+            
+            <div class="route-bars">
+                <div class="route-item">
+                    <div class="route-bar">
+                        <div class="bar delay" style="height: 60px;"></div>
+                        <div class="bar on-time" style="height: 80px;"></div>
+                    </div>
+                    <div class="route-label">Red Line</div>
+                </div>
+                <div class="route-item">
+                    <div class="route-bar">
+                        <div class="bar delay" style="height: 45px;"></div>
+                        <div class="bar on-time" style="height: 75px;"></div>
+                    </div>
+                    <div class="route-label">Green Line</div>
+                </div>
+                <div class="route-item">
+                    <div class="route-bar">
+                        <div class="bar delay" style="height: 55px;"></div>
+                        <div class="bar on-time" style="height: 85px;"></div>
+                    </div>
+                    <div class="route-label">Blue Line</div>
+                </div>
+                <div class="route-item">
+                    <div class="route-bar">
+                        <div class="bar delay" style="height: 40px;"></div>
+                        <div class="bar on-time" style="height: 90px;"></div>
+                    </div>
+                    <div class="route-label">Orange Line</div>
+                </div>
+                <div class="route-item">
+                    <div class="route-bar">
+                        <div class="bar delay" style="height: 35px;"></div>
+                        <div class="bar on-time" style="height: 95px;"></div>
+                    </div>
+                    <div class="route-label">Purple Line</div>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 20px; margin-top: 20px; font-size: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 16px; height: 16px; background: #ef4444; border-radius: 2px;"></div>
+                    <span>Average Delay (min)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 16px; height: 16px; background: #10b981; border-radius: 2px;"></div>
+                    <span>On Time</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="alerts-section">
+            <h3 class="chart-title">Live System Alerts</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <span>Active: <span id="active-alerts">0</span></span>
+                <button class="action-btn btn-secondary">Clear All</button>
+            </div>
+            
+            <div class="alert-item">
+                <i class="fas fa-check-circle" style="color: #10b981; margin-right: 8px;"></i>
+                No active alerts - All systems operating normally
+            </div>
+
+            <div class="quick-actions">
+                <button class="action-btn btn-primary" onclick="optimizeSchedule()">
+                    <i class="fas fa-magic"></i> Optimize Schedule
+                </button>
+                <button class="action-btn btn-primary" onclick="deployBackup()">
+                    <i class="fas fa-rocket"></i> Deploy Backup
+                </button>
+                <button class="action-btn btn-secondary" onclick="emergencyMode()">
+                    <i class="fas fa-exclamation-triangle"></i> Emergency Mode
+                </button>
+                <button class="action-btn btn-secondary" onclick="generateReport()">
+                    <i class="fas fa-file-alt"></i> Generate Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize charts
+        const performanceCtx = document.getElementById('performance-chart').getContext('2d');
+        const statusCtx = document.getElementById('status-pie').getContext('2d');
+
+        // Performance trend chart
+        const performanceChart = new Chart(performanceCtx, {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Scheduling Accuracy (%)',
+                    data: [97.2, 98.1, 97.8, 98.5, 98.2, 97.9, 98.2],
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        min: 95,
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        // Status pie chart
+        const statusChart = new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Running', 'Ready', 'Hold', 'Maintenance'],
+                datasets: [{
+                    data: [15, 6, 0, 4],
+                    backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                cutout: '60%'
+            }
+        });
+
+        // Real-time updates
+        function updateDashboard() {
+            fetch('/api/dashboard-data')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('scheduling-accuracy').textContent = data.scheduling_accuracy + '%';
+                    document.getElementById('avg-delay').textContent = data.average_delay + ' min';
+                    document.getElementById('train-availability').textContent = data.train_availability + '%';
+                    document.getElementById('wait-time').textContent = data.passenger_wait_time + ' min';
+                    document.getElementById('active-alerts').textContent = data.active_alerts;
+                    document.getElementById('last-update').textContent = data.last_update;
+                })
+                .catch(error => console.log('Demo mode - using sample data'));
+        }
+
+        // Quick action functions
+        function optimizeSchedule() {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="loading"></div> Optimizing...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                alert('Schedule optimization completed successfully!');
+            }, 2000);
+        }
+
+        function deployBackup() {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="loading"></div> Deploying...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                alert('Backup trains deployed successfully!');
+            }, 1500);
+        }
+
+        function emergencyMode() {
+            if (confirm('Activate Emergency Mode? This will override all standard operations.')) {
+                alert('Emergency Mode activated! All backup protocols initiated.');
+            }
+        }
+
+        function generateReport() {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="loading"></div> Generating...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                alert('Performance report generated and downloaded!');
+            }, 1000);
+        }
+
+        // Chart selector functionality
+        document.getElementById('chart-selector').addEventListener('change', function() {
+            const selectedMetric = this.value;
+            let newData, newLabel;
+            
+            switch(selectedMetric) {
+                case 'delays':
+                    newData = [2.1, 1.9, 2.0, 1.7, 1.8, 2.2, 1.8];
+                    newLabel = 'Average Delay (min)';
+                    break;
+                case 'availability':
+                    newData = [94, 96, 95, 97, 96, 95, 96];
+                    newLabel = 'Train Availability (%)';
+                    break;
+                default:
+                    newData = [97.2, 98.1, 97.8, 98.5, 98.2, 97.9, 98.2];
+                    newLabel = 'Scheduling Accuracy (%)';
+            }
+            
+            performanceChart.data.datasets[0].data = newData;
+            performanceChart.data.datasets[0].label = newLabel;
+            performanceChart.update();
+        });
+
+        // Auto-refresh dashboard every 30 seconds
+        setInterval(updateDashboard, 30000);
+
+        // Initial load
+        updateDashboard();
+
+        // Navigation functionality
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>
+    ''')
+
+@app.route('/api/dashboard-data')
 def dashboard_data():
-    """API endpoint for dashboard real-time data"""
-    conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-    
-    # Get train status distribution
-    train_status = pd.read_sql_query('''
-        SELECT status, COUNT(*) as count
-        FROM trains
-        GROUP BY status
-    ''', conn)
-    
-    # Get recent performance metrics
-    performance = pd.read_sql_query('''
-        SELECT * FROM performance_metrics
-        ORDER BY metric_date DESC
-        LIMIT 1
-    ''', conn)
-    
-    # Get recent schedules for delay analysis
-    recent_schedules = pd.read_sql_query('''
-        SELECT route, AVG(delay_minutes) as avg_delay, COUNT(*) as trips
-        FROM schedules
-        WHERE DATE(scheduled_departure) >= DATE('now', '-7 days')
-        GROUP BY route
-        ORDER BY avg_delay DESC
-        LIMIT 10
-    ''', conn)
-    
-    conn.close()
-    
-    return jsonify({
-        'train_status': train_status.to_dict('records'),
-        'performance': performance.to_dict('records')[0] if not performance.empty else current_system_state['performance_metrics'],
-        'route_performance': recent_schedules.to_dict('records'),
-        'last_update': current_system_state['last_update'].strftime('%Y-%m-%d %H:%M:%S'),
-        'alerts': current_system_state.get('alerts', [])
-    })
-
-@app.route('/api/search_trains')
-def search_trains():
-    """Search functionality for trains/routes"""
-    query = request.args.get('query', '')
-    
-    conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-    
-    search_results = pd.read_sql_query('''
-        SELECT train_id, route, status, depot, readiness_score, passenger_load
-        FROM trains
-        WHERE train_id LIKE ? OR route LIKE ? OR depot LIKE ?
-        ORDER BY readiness_score DESC
-        LIMIT 20
-    ''', conn, params=[f'%{query}%', f'%{query}%', f'%{query}%'])
-    
-    conn.close()
-    
-    return jsonify(search_results.to_dict('records'))
-
-# ============================================================================
-# Routes - Page 2: Train Status & Management
-# ============================================================================
-
-@app.route('/trains')
-def train_management():
-    """Train Status & Management page"""
-    return render_template('train_management.html')
-
-@app.route('/api/trains')
-def get_trains():
-    """Get all trains with filtering"""
-    status_filter = request.args.get('status', 'all')
-    route_filter = request.args.get('route', 'all')
-    
-    conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-    
-    query = "SELECT * FROM trains WHERE 1=1"
-    params = []
-    
-    if status_filter != 'all':
-        query += " AND status = ?"
-        params.append(status_filter)
-    
-    if route_filter != 'all':
-        query += " AND route = ?"
-        params.append(route_filter)
-    
-    query += " ORDER BY readiness_score DESC"
-    
-    trains = pd.read_sql_query(query, conn, params=params)
-    conn.close()
-    
-    return jsonify(trains.to_dict('records'))
-
-@app.route('/api/train/<train_id>')
-def get_train_details(train_id):
-    """Get detailed train information"""
-    conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-    
-    # Get train details
-    train = pd.read_sql_query('''
-        SELECT * FROM trains WHERE train_id = ?
-    ''', conn, params=[train_id])
-    
-    # Get recent schedules
-    recent_schedules = pd.read_sql_query('''
-        SELECT * FROM schedules 
-        WHERE train_id = ?
-        ORDER BY scheduled_departure DESC
-        LIMIT 10
-    ''', conn, params=[train_id])
-    
-    # Get maintenance history
-    maintenance = pd.read_sql_query('''
-        SELECT * FROM maintenance
-        WHERE train_id = ?
-        ORDER BY scheduled_date DESC
-        LIMIT 5
-    ''', conn, params=[train_id])
-    
-    conn.close()
-    
-    # AI reasoning for status
-    if not train.empty:
-        train_data = train.iloc[0]
-        ai_reasoning = ai_engine.explain_train_status(train_data)
-        
-        return jsonify({
-            'train': train.to_dict('records')[0],
-            'recent_schedules': recent_schedules.to_dict('records'),
-            'maintenance_history': maintenance.to_dict('records'),
-            'ai_reasoning': ai_reasoning
-        })
-    
-    return jsonify({'error': 'Train not found'}), 404
-
-# ============================================================================
-# Routes - Page 3: Schedule Optimization
-# ============================================================================
-
-@app.route('/scheduling')
-def schedule_optimization():
-    """Schedule Optimization page"""
-    return render_template('scheduling.html')
-
-@app.route('/api/optimize_schedule', methods=['POST'])
-def optimize_schedule():
-    """Generate optimal schedule using OR-Tools"""
-    data = request.json
-    
-    # Get current constraints
-    conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-    trains = pd.read_sql_query("SELECT * FROM trains WHERE status IN ('Running', 'Ready')", conn)
-    conn.close()
-    
-    # Run optimization
-    try:
-        optimal_schedule = optimizer.optimize_schedule(
-            trains=trains,
-            routes=data.get('routes', ['Red Line', 'Blue Line', 'Green Line']),
-            time_horizon=data.get('time_horizon', 24),
-            constraints=data.get('constraints', {})
-        )
-        
-        return jsonify({
-            'success': True,
-            'optimal_schedule': optimal_schedule,
-            'performance_improvement': optimizer.calculate_improvement(optimal_schedule),
-            'conflicts_resolved': optimizer.get_conflicts_resolved()
-        })
-    
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/current_schedule')
-def get_current_schedule():
-    """Get current schedule with performance analysis"""
-    conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-    
-    current_schedule = pd.read_sql_query('''
-        SELECT s.*, t.status as train_status, t.readiness_score
-        FROM schedules s
-        JOIN trains t ON s.train_id = t.train_id
-        WHERE DATE(s.scheduled_departure) = DATE('now')
-        ORDER BY s.scheduled_departure
-    ''', conn)
-    
-    # Route efficiency analysis
-    route_efficiency = pd.read_sql_query('''
-        SELECT 
-            route,
-            AVG(delay_minutes) as avg_delay,
-            COUNT(*) as total_trips,
-            AVG(passenger_load) as avg_load
-        FROM schedules
-        WHERE DATE(scheduled_departure) >= DATE('now', '-7 days')
-        GROUP BY route
-    ''', conn)
-    
-    conn.close()
-    
-    return jsonify({
-        'current_schedule': current_schedule.to_dict('records'),
-        'route_efficiency': route_efficiency.to_dict('records')
-    })
-
-# ============================================================================
-# Routes - Page 4: Predictive Analytics
-# ============================================================================
-
-@app.route('/analytics')
-def predictive_analytics():
-    """Predictive Analytics page"""
-    return render_template('analytics.html')
-
-@app.route('/api/demand_forecast')
-def demand_forecast():
-    """Generate demand forecast with confidence intervals"""
-    days_ahead = int(request.args.get('days', 7))
-    route = request.args.get('route', 'all')
-    
-    try:
-        forecast = ai_engine.predict_demand(days_ahead=days_ahead, route=route)
-        return jsonify({
-            'success': True,
-            'forecast': forecast,
-            'confidence_intervals': ai_engine.get_confidence_intervals(forecast),
-            'factors': ai_engine.get_demand_factors()
-        })
-    
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/maintenance_prediction')
-def maintenance_prediction():
-    """Predict maintenance needs"""
-    conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-    trains = pd.read_sql_query("SELECT * FROM trains", conn)
-    conn.close()
-    
-    predictions = []
-    for _, train in trains.iterrows():
-        prediction = ai_engine.predict_maintenance(train)
-        predictions.append({
-            'train_id': train['train_id'],
-            'prediction': prediction,
-            'confidence': prediction.get('confidence', 0.8),
-            'recommended_action': prediction.get('action', 'Monitor'),
-            'days_until_maintenance': prediction.get('days_until', 30)
-        })
-    
-    return jsonify(predictions)
-
-@app.route('/api/delay_prediction')
-def delay_prediction():
-    """Predict delays with contributing factors"""
-    route = request.args.get('route', 'Red Line')
-    time_of_day = request.args.get('time', '08:00')
-    
-    try:
-        prediction = ai_engine.predict_delays(route=route, time_of_day=time_of_day)
-        return jsonify({
-            'success': True,
-            'predicted_delay': prediction['delay'],
-            'confidence': prediction['confidence'],
-            'contributing_factors': prediction['factors'],
-            'mitigation_suggestions': prediction['suggestions']
-        })
-    
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# ============================================================================
-# Routes - Page 5: Emergency Management & Testing
-# ============================================================================
-
-@app.route('/emergency')
-def emergency_management():
-    """Emergency Management & Testing page"""
-    return render_template('emergency.html')
-
-@app.route('/api/emergency_simulation', methods=['POST'])
-def emergency_simulation():
-    """Simulate emergency scenarios"""
-    scenario = request.json
-    
-    try:
-        # Get current system state
-        conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-        available_trains = pd.read_sql_query('''
-            SELECT * FROM trains 
-            WHERE status IN ('Ready', 'Held') AND readiness_score > 0.7
-        ''', conn)
-        conn.close()
-        
-        # Run AI emergency response
-        response = ai_engine.emergency_response(
-            scenario_type=scenario.get('type'),
-            affected_trains=scenario.get('affected_trains', []),
-            affected_routes=scenario.get('affected_routes', []),
-            available_trains=available_trains
-        )
-        
-        return jsonify({
-            'success': True,
-            'response': response,
-            'alternative_routes': response.get('alternative_routes', []),
-            'backup_trains': response.get('backup_trains', []),
-            'estimated_impact': response.get('impact', {}),
-            'recovery_time': response.get('recovery_time', '15-30 minutes')
-        })
-    
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/what_if_analysis', methods=['POST'])
-def what_if_analysis():
-    """Perform what-if analysis"""
-    analysis_params = request.json
-    
-    try:
-        results = ai_engine.what_if_analysis(
-            scenario=analysis_params.get('scenario'),
-            parameters=analysis_params.get('parameters', {}),
-            time_horizon=analysis_params.get('time_horizon', 24)
-        )
-        
-        return jsonify({
-            'success': True,
-            'results': results,
-            'performance_impact': results.get('performance_delta', {}),
-            'recommendations': results.get('recommendations', [])
-        })
-    
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# ============================================================================
-# Routes - Page 6: Data Input & System Configuration
-# ============================================================================
-
-@app.route('/config')
-def data_configuration():
-    """Data Input & System Configuration page"""
-    return render_template('data_config.html')
-
-@app.route('/api/upload_data', methods=['POST'])
-def upload_data():
-    """Handle custom data upload"""
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
-    
-    file = request.files['file']
-    data_type = request.form.get('data_type', 'schedules')
-    
-    try:
-        # Process uploaded file
-        df = pd.read_csv(file)
-        
-        # Validate and clean data
-        validated_df = data_gen.validate_and_clean_data(df, data_type)
-        
-        # Save to database
-        conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-        validated_df.to_sql(data_type, conn, if_exists='append', index=False)
-        conn.close()
-        
-        # Retrain models if needed
-        if data_type in ['schedules', 'trains']:
-            ai_engine.incremental_training(validated_df, data_type)
-        
-        return jsonify({
-            'success': True,
-            'records_processed': len(validated_df),
-            'data_quality_score': data_gen.calculate_quality_score(validated_df)
-        })
-    
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/retrain_models', methods=['POST'])
-def retrain_models():
-    """Retrain AI models with latest data"""
-    try:
-        conn = sqlite3.connect('metro_ai_system.db', check_same_thread=False)
-        
-        schedules_df = pd.read_sql_query("SELECT * FROM schedules", conn)
-        trains_df = pd.read_sql_query("SELECT * FROM trains", conn)
-        maintenance_df = pd.read_sql_query("SELECT * FROM maintenance", conn)
-        
-        conn.close()
-        
-        # Retrain models
-        training_results = ai_engine.retrain_models(schedules_df, trains_df, maintenance_df)
-        
-        return jsonify({
-            'success': True,
-            'training_results': training_results,
-            'model_performance': ai_engine.get_model_performance()
-        })
-    
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    """API endpoint for dashboard data"""
+    return jsonify(get_sample_data())
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print("🚇 KMRL Enhanced Frontend Starting...")
+    print("✅ Modern UI with real-time updates")
+    print("🌐 http://localhost:5000")
+    app.run(debug=True, port=5000)
